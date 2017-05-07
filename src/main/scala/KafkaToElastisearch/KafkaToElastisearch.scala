@@ -1,7 +1,6 @@
 package KafkaToElastisearch
 
 import FileReader.FileConsumerMain.system
-import FileReader.FileNumberTopic
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.HttpMethods.POST
 import akka.http.scaladsl.model.{ContentTypes, HttpEntity, HttpRequest, HttpResponse}
@@ -21,7 +20,7 @@ import scala.concurrent.Future
 import akka.kafka.scaladsl.Consumer.Control
 import akka.stream.ActorMaterializer
 import akka.util.ByteString
-
+import com.typesafe.config.ConfigFactory
 /**
   * Created by Atul.Konaje on 5/3/2017.
   */
@@ -52,16 +51,18 @@ class KafkaToElastisearch(implicit mat: Materializer) extends  Actor with ActorL
   override def receive: Receive = {
     case Run =>
       log.info("Reading from the Kafka top Assignment2topic")
+      val kafkaendpoint =config.getString("Kafka.endpoint")
+      val kafkaport =config.getString("Kafka.port")
       val consumerSettings = ConsumerSettings(context.system, new ByteArrayDeserializer, new StringDeserializer)
-        .withBootstrapServers("localhost:9092")
+        .withBootstrapServers(kafkaendpoint+":"+kafkaport)
         .withGroupId("ForElastisearch")
         .withProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
-
-      val subscription = Subscriptions.topics(KafkaQueueToQueue.Assignment2Topic.Topic)
+      val kafka_topic2=config.getString("KafkaTopic.topic2")
+      val subscription = Subscriptions.topics(kafka_topic2)
           val(control,future)= Consumer.committableSource(consumerSettings,subscription)
             .mapAsync(1)(sendToElasatisearch)
         .map(_.committableOffset)
-        .toMat(Sink.ignore)(Keep.both) // sink ignore
+        .toMat(Sink.ignore)(Keep.both)
         .run()
   }
 
@@ -74,7 +75,8 @@ class KafkaToElastisearch(implicit mat: Materializer) extends  Actor with ActorL
     def elastiRequest(request: HttpRequest): Future[HttpResponse] = akka.stream.scaladsl.Source.single(request).via(elastiConnFlow).runWith(Sink.head)
     val jsonStr = tojson(msg.record.value())
     val index=msg.record.value().split(",",61)(0).toString().filterNot(_ == '"')
-    val request = HttpRequest(POST, uri = "/genomic/record"+"/"+index, entity = HttpEntity(ContentTypes.`application/json`,ByteString(jsonStr)))
+    val handle=config.getString("elastisearch/uri/")
+    val request = HttpRequest(POST, uri =handle+index, entity = HttpEntity(ContentTypes.`application/json`,ByteString(jsonStr)))
 
     elastiRequest(request).onComplete(
       status =>
@@ -102,6 +104,7 @@ object KafkaToEls extends App {
   case object Run
   case object Stop
   val system =ActorSystem("kfktoel")
+  val config=ConfigFactory.load()
   implicit  val materializer =ActorMaterializer.create(system)
   type Message = CommittableMessage[Array[Byte], String]
   val fc=system.actorOf(Props(new KafkaToElastisearch()))
