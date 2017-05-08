@@ -62,7 +62,7 @@ class KafkaToElastisearch(implicit mat: Materializer) extends  Actor with ActorL
 
       val subscription = Subscriptions.topics(KafkaQueueToQueue.Assignment2Topic.Topic)
       val(control,future)= Consumer.committableSource(consumerSettings,subscription)
-        .mapAsync(1)(sendToElasatisearch)
+        .mapAsync(4)(sendToElasatisearch)
         .map(_.committableOffset)
         .toMat(Sink.ignore)(Keep.both) // sink ignore
         .run()
@@ -77,6 +77,7 @@ class KafkaToElastisearch(implicit mat: Materializer) extends  Actor with ActorL
 
   def sendToElasatisearch(msg: Message): Future[Message]={
     // via flow to write to elastic search
+
 
     val jsonStr = tojson(msg.record.value())
     val index=msg.record.value().split(",",61)(0).toString().filterNot(_ == '"')
