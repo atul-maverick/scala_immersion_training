@@ -1,4 +1,4 @@
-package ScalaWebApp
+package ScalaRESTApi
 
 /**
   * Created by Atul.Konaje on 5/5/2017.
