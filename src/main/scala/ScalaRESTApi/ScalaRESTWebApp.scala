@@ -66,7 +66,7 @@ object RestService extends App with DefaultJsonProtocol{
   }
 
   /**
-    * Service needs routes to know how to handle different type of requests.
+    * Service needs routes to know how to handle different type of requests
     * Defined routes to handle get request with two different types of URL requests
     * on genome/search/(id) and genome/fuzzy/(term)
     */
