@@ -68,7 +68,7 @@ object RestService extends App with DefaultJsonProtocol{
   /**
     * Service needs routes to know how to handle different type of requests
     * Defined routes to handle get request with two different types of URL requests
-    * on genome/search/(id) and genome/fuzzy/(term)
+    * on genome/search/(id)
     */
   val routes=  {
     pathPrefix("genome") {
@@ -77,7 +77,6 @@ object RestService extends App with DefaultJsonProtocol{
           val aa: Future[Either[String, String]] = getFromEls(term, search())
           aa.map[String] {
             case Right(s) => s
-            // case Left(errorMessage) => Future["Error"]
           }
 
         }
