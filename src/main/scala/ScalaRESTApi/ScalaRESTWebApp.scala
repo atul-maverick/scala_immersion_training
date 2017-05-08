@@ -33,23 +33,21 @@ import scala.concurrent.Future
 
 object RestService extends App with DefaultJsonProtocol{
   case class search()
-  case class fuzzy()
-  case class searchInfo(a:String,b:String)
   val config = ConfigFactory.load()
   implicit val system = ActorSystem()
   implicit val mat = ActorMaterializer()
 
 
-  def ipApiConnectionFlow:Flow[HttpRequest,HttpResponse,Future[Any]] = {
+  def connFlow:Flow[HttpRequest,HttpResponse,Future[Any]] = {
     //Out going connection to elastic search to fetch records
     Http().outgoingConnection("localhost",9200)
   }
-  def fetchFromElastic(term:String, caseVal:Any): Future[Either[String, String]] = {
-    Source.single(buildRequest(term, caseVal)).via(ipApiConnectionFlow).runWith(Sink.head).flatMap { response =>
+  def getFromEls(term:String, caseVal:Any): Future[Either[String, String]] = {
+    Source.single(buildRequest(term, caseVal)).via(connFlow).runWith(Sink.head).flatMap { response =>
       response.status match {
         case OK => Future.successful(Right(response.entity.toString()))
-        case BadRequest => Future.failed(new Exception("Incorrect query"+response.status))
-        case _ => Future.failed(new Exception("Incorrect query"+response.status))
+        case BadRequest => Future.failed(new Exception("Given an incorrect query"+response.status))
+        case _ => Future.failed(new Exception("Given an incorrect query"+response.status))
       }
     }
   }
@@ -76,24 +74,14 @@ object RestService extends App with DefaultJsonProtocol{
     pathPrefix("genome") {
       (get & path("search" / Segment)) { term =>
         complete {
-          val aa: Future[Either[String, String]] = fetchFromElastic(term, search())
+          val aa: Future[Either[String, String]] = getFromEls(term, search())
           aa.map[String] {
             case Right(s) => s
             // case Left(errorMessage) => Future["Error"]
           }
 
         }
-      }~
-        (get & path("fuzzy" / Segment)) { term =>
-          complete {
-            val aa: Future[Either[String, String]] = fetchFromElastic(term, fuzzy())
-            aa.map[String] {
-              case Right(s) => s
-
-            }
-
-          }
-        }
+      }
     }
   }
 
