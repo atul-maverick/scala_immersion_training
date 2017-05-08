@@ -15,12 +15,14 @@ import akka.stream.scaladsl.{Flow, Keep, Sink, Source}
 import net.liftweb.json._
 import net.liftweb.json.Serialization.write
 import akka.stream.Materializer
+
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 import akka.kafka.scaladsl.Consumer.Control
 import akka.stream.ActorMaterializer
 import akka.util.ByteString
 import com.typesafe.config.ConfigFactory
+
 /**
   * Created by Atul.Konaje on 5/3/2017.
   */
@@ -57,32 +59,35 @@ class KafkaToElastisearch(implicit mat: Materializer) extends  Actor with ActorL
         .withBootstrapServers(kafkaendpoint+":"+kafkaport)
         .withGroupId("ForElastisearch")
         .withProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
-      val kafka_topic2=config.getString("KafkaTopic.topic2")
-      val subscription = Subscriptions.topics(kafka_topic2)
-          val(control,future)= Consumer.committableSource(consumerSettings,subscription)
-            .mapAsync(1)(sendToElasatisearch)
+
+      val subscription = Subscriptions.topics(KafkaQueueToQueue.Assignment2Topic.Topic)
+      val(control,future)= Consumer.committableSource(consumerSettings,subscription)
+        .mapAsync(1)(sendToElasatisearch)
         .map(_.committableOffset)
-        .toMat(Sink.ignore)(Keep.both)
+        .toMat(Sink.ignore)(Keep.both) // sink ignore
         .run()
   }
 
-  def sendToElasatisearch(msg: Message): Future[Message]={
-    // outgoing Http connection setup
-    implicit val system = ActorSystem("kfktoel")
-    val elastiConnFlow: Flow[HttpRequest, HttpResponse, Any] = Http().outgoingConnection("localhost",9200)
+  // outgoing Http connection setup
+  implicit val system = ActorSystem("kfktoel")
+  val elastipoint =config.getString("elastisearch.endpoint")
+  val elastiport =config.getInt("elastisearch.port")
+  val elastiCnnFlow: Flow[HttpRequest, HttpResponse, Any] = Http().outgoingConnection(elastipoint,elastiport)
+  def elastiRequest(request: HttpRequest): Future[HttpResponse] = akka.stream.scaladsl.Source.single(request).via(elastiCnnFlow).runWith(Sink.head)
 
+  def sendToElasatisearch(msg: Message): Future[Message]={
     // via flow to write to elastic search
-    def elastiRequest(request: HttpRequest): Future[HttpResponse] = akka.stream.scaladsl.Source.single(request).via(elastiConnFlow).runWith(Sink.head)
+
     val jsonStr = tojson(msg.record.value())
     val index=msg.record.value().split(",",61)(0).toString().filterNot(_ == '"')
-    val handle=config.getString("elastisearch/uri/")
-    val request = HttpRequest(POST, uri =handle+index, entity = HttpEntity(ContentTypes.`application/json`,ByteString(jsonStr)))
+    val handle=config.getString("elastisearch.uri")
+    val request = HttpRequest(POST, uri = handle+index, entity = HttpEntity(ContentTypes.`application/json`,ByteString(jsonStr)))
 
     elastiRequest(request).onComplete(
       status =>
         println(status)
     )
-     Future.successful(msg)
+    Future.successful(msg)
   }
 
   def tojson(strMsg: String): String = {
@@ -98,7 +103,7 @@ class KafkaToElastisearch(implicit mat: Materializer) extends  Actor with ActorL
     jsonString
   }
 
-  }
+}
 
 object KafkaToEls extends App {
   case object Run
@@ -109,4 +114,4 @@ object KafkaToEls extends App {
   type Message = CommittableMessage[Array[Byte], String]
   val fc=system.actorOf(Props(new KafkaToElastisearch()))
   println("Done!!")
-}
+} 

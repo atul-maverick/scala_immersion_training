@@ -39,7 +39,7 @@ class FileWriter extends Actor with ActorLogging {
       val kafkaendpoint =config.getString("Kafka.endpoint")
       val kafkaport =config.getString("Kafka.port")
       val producerSettings = ProducerSettings(context.system, new ByteArraySerializer, new StringSerializer)
-        .withBootstrapServers("localhost:9092")
+        .withBootstrapServers(kafkaendpoint+":"+kafkaport)
       val kafkaSink = Producer.plainSink(producerSettings)
       implicit  val mat =ActorMaterializer()
       val input_file=config.getString("datainput.file")
@@ -50,7 +50,7 @@ class FileWriter extends Actor with ActorLogging {
         reader => {
           reader.close()
           Promise.successful(Done).future
-        }).map(new ProducerRecord[Array[Byte], String](kafka_topic, _)).toMat(kafkaSink)(Keep.both).run()
+        }).map(new ProducerRecord[Array[Byte], String]("FileNumberTopic", _)).toMat(kafkaSink)(Keep.both).run()
       log.info(s"Currently writing to topic ${kafka_topic}")
       Console println("Writing*************")
 
